@@ -1,12 +1,15 @@
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class QueueSimulator {
     private long currentTime = 0;
     private BankQueue bankQueue;
     private GroceryQueues groceryQueues;
     private int leftCustomerCount = 0;
+    private final Lock lock = new ReentrantLock(); 
 
     public QueueSimulator(int numTellers, int bankMaxQueueLength, int numCashiers, int groceryMaxQueueLength) {
         this.bankQueue = new BankQueue(numTellers, bankMaxQueueLength);
@@ -34,26 +37,33 @@ public class QueueSimulator {
         });
 
         while (currentTime < endTime) {
-            if (currentTime >= nextCustomerTime) {
-                Customer customer = new Customer(currentTime);// notun customer create hobe 
-                boolean addedToBank = bankQueue.addCustomer(customer);// bankqueue te add hoilo
-                boolean addedToGrocery = groceryQueues.addCustomer(customer);// grocery queue te add hoilo
-                
-                if (!addedToBank) {
-                    leftCustomerCount++;
-                    System.out.println("Customer left bank queue at " + currentTime);
-                }
-                if (!addedToGrocery) {
-                    System.out.println("Customer left grocery queue at " + currentTime);
+            lock.lock(); // Added lock
+            try {
+                if (currentTime >= nextCustomerTime) {
+                    Customer customer = new Customer(currentTime);
+
+                    boolean addedToBank = bankQueue.addCustomer(customer);
+                    boolean addedToGrocery = groceryQueues.addCustomer(customer);
+
+                    if (!addedToBank) {
+                        leftCustomerCount++;
+                        System.out.println("Customer left bank queue at " + currentTime);
+                    }
+                    if (!addedToGrocery) {
+                        System.out.println("Customer left grocery queue at " + currentTime);
+                    }
+
+                    nextCustomerTime = currentTime + generateNextCustomerTime();
                 }
 
-                nextCustomerTime = currentTime + generateNextCustomerTime();
+                currentTime++;
+            } finally {
+                lock.unlock(); 
             }
-            
+
             Thread.sleep(100); // 100 mili sec dhorsi
-            currentTime++;
         }
- 
+
         executorService.shutdownNow();
     }
 
@@ -66,8 +76,11 @@ public class QueueSimulator {
     }
 
     public int getLeftCustomerCount() {
-        return leftCustomerCount;
+        lock.lock(); 
+        try {
+            return leftCustomerCount;
+        } finally {
+            lock.unlock(); 
+        }
     }
-
-
 }
